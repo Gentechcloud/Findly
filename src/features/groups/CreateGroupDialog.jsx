@@ -21,20 +21,24 @@ export default function CreateGroupDialog({ open, onClose, myId, onCreated }) {
     if (!open) return;
     setTitle(''); setAvatarFile(null); setAvatarPreview(null); setSelected(new Set()); setError('');
     setLoadingFriends(true);
-    supabase
-      .from('friend_requests')
-      .select(`
-        from_user, to_user,
-        from_profile:from_user (id, username, first_name, last_name, avatar_url),
-        to_profile:to_user (id, username, first_name, last_name, avatar_url)
-      `)
-      .eq('status', 'accepted')
-      .or(`from_user.eq.${myId},to_user.eq.${myId}`)
-      .then(({ data }) => {
-        const list = (data || []).map((r) => (r.from_user === myId ? r.to_profile : r.from_profile));
-        setFriends(list);
-        setLoadingFriends(false);
-      });
+    (async () => {
+      const { data: rels, error } = await supabase
+        .from('friend_requests')
+        .select('from_user, to_user')
+        .eq('status', 'accepted')
+        .or(`from_user.eq.${myId},to_user.eq.${myId}`);
+      if (error) console.error('CreateGroupDialog friends error:', error);
+
+      const friendIds = (rels || []).map((r) => (r.from_user === myId ? r.to_user : r.from_user));
+      if (friendIds.length === 0) { setFriends([]); setLoadingFriends(false); return; }
+
+      const { data: profs } = await supabase
+        .from('profiles')
+        .select('id, username, first_name, last_name, avatar_url')
+        .in('id', friendIds);
+      setFriends(profs || []);
+      setLoadingFriends(false);
+    })();
   }, [open, myId]);
 
   function toggle(username) {

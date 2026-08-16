@@ -465,3 +465,37 @@ begin
 end;
 $$;
 grant execute on function public.create_group(text, text, text[]) to authenticated;
+
+-- ============================================================
+-- ФИКС: связи должны указывать на profiles, а не на auth.users,
+-- иначе Supabase не может автоматически "подтягивать" профиль
+-- одним запросом (из-за этого Mail/список друзей были пустыми).
+-- ============================================================
+
+alter table public.chat_participants drop constraint if exists chat_participants_user_id_fkey;
+alter table public.chat_participants add constraint chat_participants_user_id_fkey
+  foreign key (user_id) references public.profiles (id) on delete cascade;
+
+alter table public.messages drop constraint if exists messages_sender_id_fkey;
+alter table public.messages add constraint messages_sender_id_fkey
+  foreign key (sender_id) references public.profiles (id);
+
+alter table public.chats drop constraint if exists chats_created_by_fkey;
+alter table public.chats add constraint chats_created_by_fkey
+  foreign key (created_by) references public.profiles (id);
+
+alter table public.friend_requests drop constraint if exists friend_requests_from_user_fkey;
+alter table public.friend_requests add constraint friend_requests_from_user_fkey
+  foreign key (from_user) references public.profiles (id) on delete cascade;
+
+alter table public.friend_requests drop constraint if exists friend_requests_to_user_fkey;
+alter table public.friend_requests add constraint friend_requests_to_user_fkey
+  foreign key (to_user) references public.profiles (id) on delete cascade;
+
+alter table public.message_hidden drop constraint if exists message_hidden_user_id_fkey;
+alter table public.message_hidden add constraint message_hidden_user_id_fkey
+  foreign key (user_id) references public.profiles (id) on delete cascade;
+
+-- Просим Supabase немедленно обновить "карту связей" (обычно происходит
+-- само за несколько секунд, эта команда просто ускоряет процесс).
+notify pgrst, 'reload schema';

@@ -208,14 +208,24 @@ function MainShell({ session, profile, onLogout, onProfileRefresh }) {
   useEffect(() => { checkUnread(); }, [myId]);
 
   async function openChatById(chatId) {
-    const { data } = await supabase
+    const { data: participant } = await supabase
       .from('chat_participants')
-      .select('profiles:user_id (id, username, first_name, last_name, avatar_url)')
+      .select('user_id')
       .eq('chat_id', chatId)
       .neq('user_id', myId)
       .maybeSingle();
+
+    let otherProfile = null;
+    if (participant?.user_id) {
+      const { data: prof } = await supabase
+        .from('profiles')
+        .select('id, username, first_name, last_name, avatar_url')
+        .eq('id', participant.user_id)
+        .maybeSingle();
+      otherProfile = prof;
+    }
     setActiveChatId(chatId);
-    setActiveChatProfile(data?.profiles || null);
+    setActiveChatProfile(otherProfile);
     setNav(0);
   }
 

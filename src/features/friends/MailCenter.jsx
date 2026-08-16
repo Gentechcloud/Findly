@@ -12,21 +12,37 @@ export default function MailCenter({ myId, anchorEl, onClose, onFriendsChanged }
 
   async function load() {
     setLoading(true);
-    const { data: inc } = await supabase
+
+    const { data: inc, error: incErr } = await supabase
       .from('friend_requests')
-      .select('id, from_user, created_at, profiles:from_user (username, first_name, last_name, avatar_url)')
+      .select('id, from_user, created_at')
       .eq('to_user', myId).eq('status', 'pending')
       .order('created_at', { ascending: false });
 
-    const { data: resp } = await supabase
+    const { data: resp, error: respErr } = await supabase
       .from('friend_requests')
-      .select('id, to_user, status, responded_at, seen_by_sender, profiles:to_user (username, first_name, last_name)')
+      .select('id, to_user, status, responded_at')
       .eq('from_user', myId).eq('seen_by_sender', false)
-      .not('status', 'eq', 'pending')
+      .neq('status', 'pending')
       .order('responded_at', { ascending: false });
 
-    setIncoming(inc || []);
-    setResponses(resp || []);
+    if (incErr) console.error('Mail incoming error:', incErr);
+    if (respErr) console.error('Mail responses error:', respErr);
+
+    // Профили подтягиваем отдельным запросом — надёжнее, чем полагаться
+    // на автоматическое связывание таблиц.
+    const otherIds = [...new Set([...(inc || []).map((r) => r.from_user), ...(resp || []).map((r) => r.to_user)])];
+    let profilesById = {};
+    if (otherIds.length) {
+      const { data: profs } = await supabase
+        .from('profiles')
+        .select('id, username, first_name, last_name, avatar_url')
+        .in('id', otherIds);
+      profilesById = Object.fromEntries((profs || []).map((p) => [p.id, p]));
+    }
+
+    setIncoming((inc || []).map((r) => ({ ...r, profile: profilesById[r.from_user] })));
+    setResponses((resp || []).map((r) => ({ ...r, profile: profilesById[r.to_user] })));
     setLoading(false);
 
     if (resp?.length) {
@@ -40,7 +56,8 @@ export default function MailCenter({ myId, anchorEl, onClose, onFriendsChanged }
   useEffect(() => { if (anchorEl) load(); }, [anchorEl, myId]);
 
   async function respond(id, accept) {
-    await supabase.rpc('respond_friend_request', { request_id: id, accept });
+    const { error } = await supabase.rpc('respond_friend_request', { request_id: id, accept });
+    if (error) { console.error(error); return; }
     setIncoming((prev) => prev.filter((r) => r.id !== id));
     onFriendsChanged?.();
   }
@@ -67,10 +84,10 @@ export default function MailCenter({ myId, anchorEl, onClose, onFriendsChanged }
 
             {incoming.map((req) => (
               <Stack key={req.id} direction="row" alignItems="center" spacing={1.5}>
-                <FindlyAvatar src={req.profiles?.avatar_url} name={`${req.profiles?.first_name || ''} ${req.profiles?.last_name || ''}`} seed={req.profiles?.username} size={40} />
+                <FindlyAvatar src={req.profile?.avatar_url} name={`${req.profile?.first_name || ''} ${req.profile?.last_name || ''}`} seed={req.profile?.username} size={40} />
                 <Stack sx={{ minWidth: 0, flex: 1 }}>
                   <Typography variant="bodyMedium" noWrap>
-                    <b>{req.profiles?.first_name} {req.profiles?.last_name}</b> хочет добавить вас в друзья
+                    <b>{req.profile ? `${req.profile.first_name} ${req.profile.last_name}` : 'Пользователь'}</b> хочет добавить вас в друзья
                   </Typography>
                   <Stack direction="row" spacing={1} sx={{ mt: 0.5 }}>
                     <Button size="small" onClick={() => respond(req.id, true)} sx={{ color: 'success.main', minWidth: 0 }}>Принять</Button>
@@ -84,7 +101,7 @@ export default function MailCenter({ myId, anchorEl, onClose, onFriendsChanged }
 
             {responses.map((r) => (
               <Typography key={r.id} variant="bodyMedium" color="text.secondary">
-                {r.profiles?.first_name} {r.profiles?.last_name} {r.status === 'accepted' ? 'принял(а) вашу заявку в друзья' : 'отклонил(а) вашу заявку в друзья'}
+                {r.profile ? `${r.profile.first_name} ${r.profile.last_name}` : 'Пользователь'} {r.status === 'accepted' ? 'принял(а) вашу заявку в друзья' : 'отклонил(а) вашу заявку в друзья'}
               </Typography>
             ))}
           </Stack>

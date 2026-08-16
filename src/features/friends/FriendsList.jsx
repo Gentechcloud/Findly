@@ -11,18 +11,23 @@ export default function FriendsList({ myId, onOpenChat, refreshKey }) {
     let cancelled = false;
     async function load() {
       setLoading(true);
-      const { data } = await supabase
+      const { data: rels, error } = await supabase
         .from('friend_requests')
-        .select(`
-          id, from_user, to_user,
-          from_profile:from_user (id, username, first_name, last_name, avatar_url, bio),
-          to_profile:to_user (id, username, first_name, last_name, avatar_url, bio)
-        `)
+        .select('from_user, to_user')
         .eq('status', 'accepted')
         .or(`from_user.eq.${myId},to_user.eq.${myId}`);
 
-      const list = (data || []).map((r) => (r.from_user === myId ? r.to_profile : r.from_profile));
-      if (!cancelled) { setFriends(list); setLoading(false); }
+      if (error) console.error('FriendsList error:', error);
+
+      const friendIds = (rels || []).map((r) => (r.from_user === myId ? r.to_user : r.from_user));
+      if (friendIds.length === 0) { if (!cancelled) { setFriends([]); setLoading(false); } return; }
+
+      const { data: profs } = await supabase
+        .from('profiles')
+        .select('id, username, first_name, last_name, avatar_url, bio')
+        .in('id', friendIds);
+
+      if (!cancelled) { setFriends(profs || []); setLoading(false); }
     }
     load();
     return () => { cancelled = true; };

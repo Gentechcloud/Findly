@@ -26,10 +26,20 @@ export default function ChatList({ myId, activeChatId, onOpenChat, refreshKey })
       if (directIds.length) {
         const { data: participants } = await supabase
           .from('chat_participants')
-          .select('chat_id, profiles:user_id (id, username, first_name, last_name, avatar_url)')
+          .select('chat_id, user_id')
           .in('chat_id', directIds)
           .neq('user_id', myId);
-        (participants || []).forEach((p) => { otherByChat[p.chat_id] = p.profiles; });
+
+        const otherUserIds = [...new Set((participants || []).map((p) => p.user_id))];
+        let profilesById = {};
+        if (otherUserIds.length) {
+          const { data: profs } = await supabase
+            .from('profiles')
+            .select('id, username, first_name, last_name, avatar_url')
+            .in('id', otherUserIds);
+          profilesById = Object.fromEntries((profs || []).map((p) => [p.id, p]));
+        }
+        (participants || []).forEach((p) => { otherByChat[p.chat_id] = profilesById[p.user_id]; });
       }
 
       const { data: lastMessages } = await supabase
