@@ -8,6 +8,8 @@ import {
 } from '@mui/material';
 import LogoutRoundedIcon from '@mui/icons-material/LogoutRounded';
 import AddRoundedIcon from '@mui/icons-material/AddRounded';
+import SearchRoundedIcon from '@mui/icons-material/SearchRounded';
+import ArrowBackRoundedIcon from '@mui/icons-material/ArrowBackRounded';
 import NotificationsRoundedIcon from '@mui/icons-material/NotificationsRounded';
 import ChatBubbleRoundedIcon from '@mui/icons-material/ChatBubbleRounded';
 import GroupRoundedIcon from '@mui/icons-material/GroupRounded';
@@ -15,6 +17,7 @@ import SettingsRoundedIcon from '@mui/icons-material/SettingsRounded';
 import PersonRoundedIcon from '@mui/icons-material/PersonRounded';
 import DarkModeRoundedIcon from '@mui/icons-material/DarkModeRounded';
 import LightModeRoundedIcon from '@mui/icons-material/LightModeRounded';
+import PhotoCameraRoundedIcon from '@mui/icons-material/PhotoCameraRounded';
 import { supabase } from './lib/supabaseClient';
 import AuthPage from './features/auth/AuthPage';
 import OnboardingPage from './features/profile/OnboardingPage';
@@ -26,6 +29,7 @@ import ChatList from './features/chats/ChatList';
 import ChatWindow from './features/chats/ChatWindow';
 import FriendsList from './features/friends/FriendsList';
 import MailCenter from './features/friends/MailCenter';
+import CreateGroupDialog from './features/groups/CreateGroupDialog';
 
 const NAV_ITEMS = [
   { label: 'Чаты', icon: <ChatBubbleRoundedIcon /> },
@@ -120,17 +124,55 @@ function SettingsTab({ resolvedMode, setMode, accent, setAccent, onLogout }) {
   );
 }
 
-function ProfileTab({ profile, username, onLogout }) {
+function ProfileTab({ profile, username, onLogout, onAvatarUpdated, myId }) {
+  const [uploading, setUploading] = useState(false);
+  const [err, setErr] = useState('');
+
+  async function handlePick(e) {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    if (file.size > 8 * 1024 * 1024) { setErr('Файл слишком большой (максимум 8 МБ).'); return; }
+    setUploading(true);
+    setErr('');
+    const ext = file.name.split('.').pop() || 'jpg';
+    const path = `${myId}/avatar.${ext}`;
+    const { error: uploadError } = await supabase.storage.from('avatars').upload(path, file, { upsert: true, contentType: file.type || 'image/jpeg' });
+    setUploading(false);
+    if (uploadError) {
+      setErr(uploadError.message === 'Failed to fetch'
+        ? 'Нет соединения с хранилищем Supabase. Проверьте интернет и что бакет "avatars" создан (Supabase → Storage).'
+        : uploadError.message);
+      return;
+    }
+    const { data: pub } = supabase.storage.from('avatars').getPublicUrl(path);
+    const avatar_url = pub.publicUrl + `?t=${Date.now()}`;
+    await supabase.from('profiles').update({ avatar_url }).eq('id', myId);
+    onAvatarUpdated?.();
+  }
+
   return (
     <Stack spacing={3} sx={{ maxWidth: 480, mx: 'auto', alignItems: 'center', textAlign: 'center' }}>
-      <FindlyAvatar src={profile?.avatar_url} name={`${profile?.first_name || ''} ${profile?.last_name || ''}`} seed={username} size={96} />
+      <Box sx={{ position: 'relative' }}>
+        <FindlyAvatar src={profile?.avatar_url} name={`${profile?.first_name || ''} ${profile?.last_name || ''}`} seed={username} size={96} />
+        <IconButton
+          component="label"
+          size="small"
+          sx={{ position: 'absolute', bottom: 0, right: 0, bgcolor: 'primary.main', color: 'primary.contrastText', '&:hover': { bgcolor: 'primary.main' } }}
+        >
+          <PhotoCameraRoundedIcon fontSize="small" />
+          <input type="file" accept="image/*" hidden onChange={handlePick} />
+        </IconButton>
+      </Box>
+      {uploading && <CircularProgress size={20} />}
+      {err && <Alert severity="error" sx={{ borderRadius: 3, textAlign: 'left' }}>{err}</Alert>}
       <Stack spacing={0.5}>
         <Typography variant="headlineSmall">{profile?.first_name} {profile?.last_name}</Typography>
         <Typography variant="bodyMedium" color="text.secondary">@{username}</Typography>
       </Stack>
       {profile?.bio && <Typography variant="bodyMedium">{profile.bio}</Typography>}
       <Typography variant="bodySmall" color="text.secondary">
-        Редактирование профиля, публикация фото/видео и лента в стиле Instagram появятся на Этапе 9.
+        Редактирование имени/описания, публикация фото/видео и лента в стиле Instagram появятся на Этапе 9.
       </Typography>
       <Button variant="outlined" color="error" onClick={onLogout} sx={{ borderColor: 'error.main', color: 'error.main' }}>
         Выйти из аккаунта
@@ -139,7 +181,7 @@ function ProfileTab({ profile, username, onLogout }) {
   );
 }
 
-function MainShell({ session, profile, onLogout }) {
+function MainShell({ session, profile, onLogout, onProfileRefresh }) {
   const isDesktop = useMediaQuery('(min-width:900px)');
   const [nav, setNav] = useState(0);
   const { mode, setMode, resolvedMode, accent, setAccent } = useColorMode();
@@ -153,6 +195,8 @@ function MainShell({ session, profile, onLogout }) {
   const [mailAnchor, setMailAnchor] = useState(null);
   const [hasUnread, setHasUnread] = useState(false);
   const [comingSoonOpen, setComingSoonOpen] = useState(false);
+  const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
+  const [createGroupOpen, setCreateGroupOpen] = useState(false);
 
   async function checkUnread() {
     const { count: c1 } = await supabase.from('friend_requests').select('id', { count: 'exact', head: true })
@@ -197,35 +241,74 @@ function MainShell({ session, profile, onLogout }) {
       <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
         <AppBar position="static" elevation={0}>
           <Toolbar sx={{ gap: 1.5 }}>
-            <Typography sx={{ fontFamily: 'Sora, sans-serif', fontWeight: 700, fontSize: 20, mr: 1 }}>
-              Findly
-            </Typography>
-
-            <Findline
-              myId={myId}
-              onOpenChat={openChatFromFindline}
-              onFriendsChanged={() => { checkUnread(); setChatListRefresh((k) => k + 1); }}
-              onError={setSnackbar}
-            />
-
-            <Box sx={{ flex: 1 }} />
-            <Tooltip title="Создать группу или канал">
-              <IconButton onClick={() => setComingSoonOpen(true)}><AddRoundedIcon /></IconButton>
-            </Tooltip>
-            <Tooltip title="Mail — центр уведомлений">
-              <IconButton onClick={(e) => { setMailAnchor(e.currentTarget); setHasUnread(false); }}>
-                <Box sx={{ position: 'relative' }}>
-                  <NotificationsRoundedIcon />
-                  {hasUnread && <Box sx={{ position: 'absolute', top: -1, right: -1, width: 8, height: 8, borderRadius: '50%', bgcolor: 'error.main' }} />}
-                </Box>
-              </IconButton>
-            </Tooltip>
-            <FindlyAvatar src={profile?.avatar_url} name={`${profile?.first_name || ''} ${profile?.last_name || ''}`} seed={username} size={36} sx={{ ml: 0.5 }} onClick={() => setNav(3)} style={{ cursor: 'pointer' }} />
-            <Tooltip title="Выйти из аккаунта">
-              <IconButton onClick={onLogout}><LogoutRoundedIcon /></IconButton>
-            </Tooltip>
+            {isDesktop ? (
+              <>
+                <Typography sx={{ fontFamily: 'Sora, sans-serif', fontWeight: 700, fontSize: 20, mr: 1 }}>
+                  Findly
+                </Typography>
+                <Findline
+                  myId={myId}
+                  onOpenChat={openChatFromFindline}
+                  onFriendsChanged={() => { checkUnread(); setChatListRefresh((k) => k + 1); }}
+                  onError={setSnackbar}
+                />
+                <Box sx={{ flex: 1 }} />
+                <Tooltip title="Создать группу или канал">
+                  <IconButton onClick={() => setCreateGroupOpen(true)}><AddRoundedIcon /></IconButton>
+                </Tooltip>
+                <Tooltip title="Mail — центр уведомлений">
+                  <IconButton onClick={(e) => { setMailAnchor(e.currentTarget); setHasUnread(false); }}>
+                    <Box sx={{ position: 'relative' }}>
+                      <NotificationsRoundedIcon />
+                      {hasUnread && <Box sx={{ position: 'absolute', top: -1, right: -1, width: 8, height: 8, borderRadius: '50%', bgcolor: 'error.main' }} />}
+                    </Box>
+                  </IconButton>
+                </Tooltip>
+                <FindlyAvatar src={profile?.avatar_url} name={`${profile?.first_name || ''} ${profile?.last_name || ''}`} seed={username} size={36} sx={{ ml: 0.5, cursor: 'pointer' }} onClick={() => setNav(3)} />
+                <Tooltip title="Выйти из аккаунта">
+                  <IconButton onClick={onLogout}><LogoutRoundedIcon /></IconButton>
+                </Tooltip>
+              </>
+            ) : (
+              <>
+                <Typography sx={{ fontFamily: 'Sora, sans-serif', fontWeight: 700, fontSize: 18 }}>
+                  Findly
+                </Typography>
+                <Box sx={{ flex: 1 }} />
+                <Tooltip title="Findline — поиск">
+                  <IconButton onClick={() => setMobileSearchOpen(true)}><SearchRoundedIcon /></IconButton>
+                </Tooltip>
+                <Tooltip title="Создать группу или канал">
+                  <IconButton onClick={() => setCreateGroupOpen(true)}><AddRoundedIcon /></IconButton>
+                </Tooltip>
+                <Tooltip title="Mail — центр уведомлений">
+                  <IconButton onClick={(e) => { setMailAnchor(e.currentTarget); setHasUnread(false); }}>
+                    <Box sx={{ position: 'relative' }}>
+                      <NotificationsRoundedIcon />
+                      {hasUnread && <Box sx={{ position: 'absolute', top: -1, right: -1, width: 8, height: 8, borderRadius: '50%', bgcolor: 'error.main' }} />}
+                    </Box>
+                  </IconButton>
+                </Tooltip>
+                <FindlyAvatar src={profile?.avatar_url} name={`${profile?.first_name || ''} ${profile?.last_name || ''}`} seed={username} size={32} sx={{ ml: 0.5, cursor: 'pointer' }} onClick={() => setNav(3)} />
+              </>
+            )}
           </Toolbar>
         </AppBar>
+
+        <Dialog fullScreen open={mobileSearchOpen} onClose={() => setMobileSearchOpen(false)}>
+          <Stack direction="row" alignItems="center" spacing={1} sx={{ p: 1.5, borderBottom: '1px solid', borderColor: 'divider' }}>
+            <IconButton onClick={() => setMobileSearchOpen(false)}><ArrowBackRoundedIcon /></IconButton>
+            <Box sx={{ flex: 1 }}>
+              <Findline
+                myId={myId}
+                autoFocus
+                onOpenChat={(chatId, p) => { openChatFromFindline(chatId, p); setMobileSearchOpen(false); }}
+                onFriendsChanged={() => { checkUnread(); setChatListRefresh((k) => k + 1); }}
+                onError={setSnackbar}
+              />
+            </Box>
+          </Stack>
+        </Dialog>
 
         <MailCenter myId={myId} anchorEl={mailAnchor} onClose={() => setMailAnchor(null)} onFriendsChanged={() => { checkUnread(); setChatListRefresh((k) => k + 1); }} />
 
@@ -261,7 +344,7 @@ function MainShell({ session, profile, onLogout }) {
             )}
             {nav === 3 && (
               <Box sx={{ flex: 1, p: { xs: 2, md: 4 }, pb: isDesktop ? 4 : 10, display: 'flex', alignItems: 'flex-start', justifyContent: 'center' }}>
-                <ProfileTab profile={profile} username={username} onLogout={onLogout} />
+                <ProfileTab profile={profile} username={username} onLogout={onLogout} myId={myId} onAvatarUpdated={onProfileRefresh} />
               </Box>
             )}
           </Box>
@@ -296,10 +379,17 @@ function MainShell({ session, profile, onLogout }) {
       <Dialog open={comingSoonOpen} onClose={() => setComingSoonOpen(false)} PaperProps={{ sx: { borderRadius: 5 } }}>
         <DialogTitle>Скоро</DialogTitle>
         <DialogContent>
-          <Typography variant="bodyMedium">Создание групп и каналов появится на Этапе 6 — сейчас над этим работаем.</Typography>
+          <Typography variant="bodyMedium">Создание каналов появится на следующем этапе — сейчас доступны группы.</Typography>
         </DialogContent>
         <DialogActions><Button onClick={() => setComingSoonOpen(false)}>Понятно</Button></DialogActions>
       </Dialog>
+
+      <CreateGroupDialog
+        open={createGroupOpen}
+        onClose={() => setCreateGroupOpen(false)}
+        myId={myId}
+        onCreated={(chatId) => { setChatListRefresh((k) => k + 1); openChatById(chatId); }}
+      />
 
       <Snackbar open={!!snackbar} autoHideDuration={5000} onClose={() => setSnackbar('')} anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}>
         <Alert severity="error" onClose={() => setSnackbar('')} sx={{ borderRadius: 4 }}>{snackbar}</Alert>
@@ -335,5 +425,5 @@ export default function App() {
   if (!session) return <AuthPage onAuthed={() => {}} />;
   if (profile && !profile.onboarding_completed) return <OnboardingPage session={session} onDone={() => loadProfile(session.user.id)} />;
 
-  return <MainShell session={session} profile={profile} onLogout={() => supabase.auth.signOut()} />;
+  return <MainShell session={session} profile={profile} onLogout={() => supabase.auth.signOut()} onProfileRefresh={() => loadProfile(session.user.id)} />;
 }

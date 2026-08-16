@@ -55,9 +55,14 @@ export default function OnboardingPage({ session, onDone }) {
         const path = `${session.user.id}/avatar.${ext}`;
         const { error: uploadError } = await supabase.storage
           .from('avatars')
-          .upload(path, avatarFile, { upsert: true });
+          .upload(path, avatarFile, { upsert: true, contentType: avatarFile.type || 'image/jpeg' });
         if (uploadError) {
-          setError('Не удалось загрузить фото: ' + uploadError.message);
+          console.error('Avatar upload error:', uploadError);
+          setError(
+            uploadError.message === 'Failed to fetch'
+              ? 'Не удалось загрузить фото — нет соединения с хранилищем Supabase. Проверьте: 1) интернет-соединение, 2) что в Supabase → Storage существует бакет "avatars" (если нет — перезалейте supabase-setup.sql), 3) отключите VPN/блокировщики рекламы на секунду и попробуйте снова.'
+              : 'Не удалось загрузить фото: ' + uploadError.message
+          );
           setLoading(false);
           return;
         }

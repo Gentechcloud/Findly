@@ -8,7 +8,7 @@ import CloseRoundedIcon from '@mui/icons-material/CloseRounded';
 import { supabase } from '../../lib/supabaseClient';
 import FindlyAvatar from '../../components/common/FindlyAvatar';
 
-export default function Findline({ myId, onOpenChat, onFriendsChanged, onError }) {
+export default function Findline({ myId, onOpenChat, onFriendsChanged, onError, autoFocus }) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
   const [loading, setLoading] = useState(false);
@@ -96,6 +96,7 @@ export default function Findline({ myId, onOpenChat, onFriendsChanged, onError }
           <InputBase
             placeholder="Findline — поиск чатов, сообщений, @ников"
             fullWidth value={query}
+            autoFocus={autoFocus}
             onFocus={() => setOpen(true)}
             onChange={(e) => setQuery(e.target.value)}
             sx={{ fontSize: 14 }}

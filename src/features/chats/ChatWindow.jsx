@@ -141,11 +141,23 @@ export default function ChatWindow({ chatId, otherProfile, myId, onBack, isDeskt
     <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, height: '100%' }}>
       <Stack direction="row" alignItems="center" spacing={1.5} sx={{ p: 1.5, borderBottom: '1px solid', borderColor: 'divider' }}>
         {!isDesktop && <IconButton onClick={onBack}><ArrowBackRoundedIcon /></IconButton>}
-        <FindlyAvatar src={otherProfile?.avatar_url} name={`${otherProfile?.first_name || ''} ${otherProfile?.last_name || ''}`} seed={otherProfile?.username} size={40} />
-        <Box>
-          <Typography variant="titleMedium">{otherProfile ? `${otherProfile.first_name} ${otherProfile.last_name}` : '...'}</Typography>
-          <Typography variant="labelSmall" color="text.secondary">@{otherProfile?.username}</Typography>
-        </Box>
+        {otherProfile?.type === 'group' ? (
+          <>
+            <FindlyAvatar src={otherProfile.avatar_url} name={otherProfile.title || 'Группа'} seed={chatId} size={40} />
+            <Box>
+              <Typography variant="titleMedium">{otherProfile.title}</Typography>
+              <Typography variant="labelSmall" color="text.secondary">Группа</Typography>
+            </Box>
+          </>
+        ) : (
+          <>
+            <FindlyAvatar src={otherProfile?.avatar_url} name={`${otherProfile?.first_name || ''} ${otherProfile?.last_name || ''}`} seed={otherProfile?.username} size={40} />
+            <Box>
+              <Typography variant="titleMedium">{otherProfile ? `${otherProfile.first_name} ${otherProfile.last_name}` : '...'}</Typography>
+              <Typography variant="labelSmall" color="text.secondary">@{otherProfile?.username}</Typography>
+            </Box>
+          </>
+        )}
       </Stack>
 
       <Box sx={{ flex: 1, overflowY: 'auto', p: 2, display: 'flex', flexDirection: 'column', gap: 1 }}>

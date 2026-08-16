@@ -414,3 +414,54 @@ begin
   return new_chat;
 end;
 $$;
+
+-- ============================================================
+-- Этап 6а: группы (создание, участники, роли — база)
+-- ============================================================
+
+alter table public.chats add column if not exists slow_mode_seconds integer not null default 0;
+alter table public.chat_participants add column if not exists role text not null default 'member'
+  check (role in ('owner','admin','moderator','member'));
+alter table public.chat_participants add column if not exists muted_until timestamptz;
+
+-- Создать группу: я становлюсь владельцем, добавляю участников только из друзей
+create or replace function public.create_group(group_title text, group_avatar_url text, member_usernames text[])
+returns uuid
+language plpgsql
+security definer set search_path = public
+as $$
+declare
+  me uuid := auth.uid();
+  new_chat uuid;
+  uname text;
+  target uuid;
+  is_friend boolean;
+begin
+  if group_title is null or length(trim(group_title)) = 0 then
+    raise exception 'Укажите название группы';
+  end if;
+
+  insert into public.chats (type, title, avatar_url, created_by) values ('group', group_title, group_avatar_url, me)
+    returning id into new_chat;
+  insert into public.chat_participants (chat_id, user_id, role) values (new_chat, me, 'owner');
+
+  if member_usernames is not null then
+    foreach uname in array member_usernames loop
+      select id into target from public.profiles where username = uname;
+      if target is not null and target <> me then
+        select exists(
+          select 1 from public.friend_requests
+          where status = 'accepted' and ((from_user = me and to_user = target) or (from_user = target and to_user = me))
+        ) into is_friend;
+        if is_friend then
+          insert into public.chat_participants (chat_id, user_id, role) values (new_chat, target, 'member')
+            on conflict (chat_id, user_id) do nothing;
+        end if;
+      end if;
+    end loop;
+  end if;
+
+  return new_chat;
+end;
+$$;
+grant execute on function public.create_group(text, text, text[]) to authenticated;
