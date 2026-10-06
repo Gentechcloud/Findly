@@ -29,7 +29,7 @@ export default function Findline({ myId, onOpenChat, onFriendsChanged, onError, 
         const exactUsername = q.slice(1);
         const { data } = await supabase
           .from('profiles')
-          .select('id, username, first_name, last_name, avatar_url')
+          .select('id, username, first_name, last_name, avatar_url, avatar_visibility, restrict_voice, restrict_media')
           .eq('username', exactUsername)
           .maybeSingle();
         setUserResult(data || null);
@@ -111,7 +111,16 @@ export default function Findline({ myId, onOpenChat, onFriendsChanged, onError, 
             ) : query.startsWith('@') ? (
               userResult ? (
                 <Box sx={{ p: 2, display: 'flex', alignItems: 'center', gap: 1.5 }}>
-                  <FindlyAvatar src={userResult.avatar_url} name={`${userResult.first_name || ''} ${userResult.last_name || ''}`} seed={userResult.username} size={44} />
+                  <FindlyAvatar
+                    src={
+                      userResult.avatar_visibility === 'none' || (userResult.avatar_visibility === 'friends' && relStatus !== 'friends')
+                        ? null
+                        : userResult.avatar_url
+                    }
+                    name={`${userResult.first_name || ''} ${userResult.last_name || ''}`}
+                    seed={userResult.username}
+                    size={44}
+                  />
                   <Stack sx={{ minWidth: 0, flex: 1 }}>
                     <Typography variant="titleSmall" noWrap>{userResult.first_name} {userResult.last_name}</Typography>
                     <Typography variant="labelSmall" color="text.secondary">@{userResult.username}</Typography>

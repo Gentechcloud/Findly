@@ -499,3 +499,96 @@ alter table public.message_hidden add constraint message_hidden_user_id_fkey
 -- Просим Supabase немедленно обновить "карту связей" (обычно происходит
 -- само за несколько секунд, эта команда просто ускоряет процесс).
 notify pgrst, 'reload schema';
+
+-- ============================================================
+-- Этап 8: настройки — безопасность чата, приватность, блокировки
+-- ============================================================
+
+alter table public.profiles add column if not exists restrict_voice boolean not null default false;
+alter table public.profiles add column if not exists restrict_media boolean not null default false;
+alter table public.profiles add column if not exists avatar_visibility text not null default 'all'
+  check (avatar_visibility in ('all','friends','none'));
+alter table public.profiles add column if not exists profile_visibility text not null default 'all'
+  check (profile_visibility in ('all','friends'));
+
+create table if not exists public.blocked_users (
+  blocker_id uuid references public.profiles (id) on delete cascade,
+  blocked_id uuid references public.profiles (id) on delete cascade,
+  created_at timestamptz not null default now(),
+  primary key (blocker_id, blocked_id)
+);
+alter table public.blocked_users enable row level security;
+
+drop policy if exists "Вижу блокировки, где я участник" on public.blocked_users;
+create policy "Вижу блокировки, где я участник" on public.blocked_users for select
+  using (auth.uid() = blocker_id or auth.uid() = blocked_id);
+
+drop policy if exists "Блокировать могу только от своего имени" on public.blocked_users;
+create policy "Блокировать могу только от своего имени" on public.blocked_users for insert
+  with check (auth.uid() = blocker_id);
+
+drop policy if exists "Разблокировать могу только свои блокировки" on public.blocked_users;
+create policy "Разблокировать могу только свои блокировки" on public.blocked_users for delete
+  using (auth.uid() = blocker_id);
+
+-- Блокировка теперь тоже мешает начать (новый) чат
+create or replace function public.start_direct_chat(other_username text)
+returns uuid
+language plpgsql
+security definer set search_path = public
+as $$
+declare
+  me uuid := auth.uid();
+  other uuid;
+  existing uuid;
+  new_chat uuid;
+  are_friends boolean;
+  is_blocked boolean;
+begin
+  select id into other from public.profiles where username = other_username;
+  if other is null then raise exception 'Пользователь не найден'; end if;
+  if other = me then raise exception 'Нельзя создать чат с самим собой'; end if;
+
+  select exists(
+    select 1 from public.blocked_users
+    where (blocker_id = me and blocked_id = other) or (blocker_id = other and blocked_id = me)
+  ) into is_blocked;
+  if is_blocked then raise exception 'Переписка недоступна — пользователь заблокирован'; end if;
+
+  select exists(
+    select 1 from public.friend_requests
+    where status = 'accepted' and ((from_user = me and to_user = other) or (from_user = other and to_user = me))
+  ) into are_friends;
+  if not are_friends then raise exception 'Сначала добавьте пользователя в друзья'; end if;
+
+  select cp1.chat_id into existing
+  from public.chat_participants cp1
+  join public.chat_participants cp2 on cp1.chat_id = cp2.chat_id
+  join public.chats c on c.id = cp1.chat_id
+  where cp1.user_id = me and cp2.user_id = other and c.type = 'direct'
+  limit 1;
+
+  if existing is not null then return existing; end if;
+
+  insert into public.chats (type, created_by) values ('direct', me) returning id into new_chat;
+  insert into public.chat_participants (chat_id, user_id) values (new_chat, me), (new_chat, other);
+  return new_chat;
+end;
+$$;
+
+-- Смена ника: та же проверка формата, что при регистрации
+create or replace function public.change_username(new_username text)
+returns void
+language plpgsql
+security definer set search_path = public
+as $$
+begin
+  if new_username !~ '^[a-zA-Z0-9_]{3,20}$' then
+    raise exception 'Ник: 3–20 символов, латиница/цифры/_';
+  end if;
+  update public.profiles set username = new_username where id = auth.uid();
+exception when unique_violation then
+  raise exception 'Этот ник уже занят';
+end;
+$$;
+grant execute on function public.change_username(text) to authenticated;

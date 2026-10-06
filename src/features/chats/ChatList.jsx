@@ -35,7 +35,7 @@ export default function ChatList({ myId, activeChatId, onOpenChat, refreshKey })
         if (otherUserIds.length) {
           const { data: profs } = await supabase
             .from('profiles')
-            .select('id, username, first_name, last_name, avatar_url')
+            .select('id, username, first_name, last_name, avatar_url, restrict_voice, restrict_media')
             .in('id', otherUserIds);
           profilesById = Object.fromEntries((profs || []).map((p) => [p.id, p]));
         }

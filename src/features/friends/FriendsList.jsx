@@ -24,7 +24,7 @@ export default function FriendsList({ myId, onOpenChat, refreshKey }) {
 
       const { data: profs } = await supabase
         .from('profiles')
-        .select('id, username, first_name, last_name, avatar_url, bio')
+        .select('id, username, first_name, last_name, avatar_url, bio, restrict_voice, restrict_media')
         .in('id', friendIds);
 
       if (!cancelled) { setFriends(profs || []); setLoading(false); }

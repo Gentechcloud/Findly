@@ -30,6 +30,7 @@ import ChatWindow from './features/chats/ChatWindow';
 import FriendsList from './features/friends/FriendsList';
 import MailCenter from './features/friends/MailCenter';
 import CreateGroupDialog from './features/groups/CreateGroupDialog';
+import SecurityPrivacyAccount from './features/settings/SecurityPrivacyAccount';
 
 const NAV_ITEMS = [
   { label: 'Чаты', icon: <ChatBubbleRoundedIcon /> },
@@ -69,7 +70,7 @@ function NavRail({ value, onChange }) {
   );
 }
 
-function SettingsTab({ resolvedMode, setMode, accent, setAccent, onLogout }) {
+function SettingsTab({ resolvedMode, setMode, accent, setAccent, onLogout, myId, profile, email, onProfileRefresh }) {
   return (
     <Stack spacing={3} sx={{ maxWidth: 560, mx: 'auto' }}>
       <Typography variant="headlineSmall">Настройки</Typography>
@@ -109,17 +110,11 @@ function SettingsTab({ resolvedMode, setMode, accent, setAccent, onLogout }) {
         </CardContent>
       </Card>
 
-      <Card variant="outlined">
-        <CardContent>
-          <Typography variant="titleMedium" gutterBottom>Аккаунт</Typography>
-          <Typography variant="bodyMedium" color="text.secondary" sx={{ mb: 2 }}>
-            Смена пароля, ника, почты, приватность и ограничения чата появятся здесь на Этапе 8.
-          </Typography>
-          <Button variant="outlined" color="error" onClick={onLogout} sx={{ borderColor: 'error.main', color: 'error.main' }}>
-            Выйти из аккаунта
-          </Button>
-        </CardContent>
-      </Card>
+      <SecurityPrivacyAccount myId={myId} profile={profile} email={email} onProfileRefresh={onProfileRefresh} />
+
+      <Button variant="outlined" color="error" onClick={onLogout} sx={{ borderColor: 'error.main', color: 'error.main', alignSelf: 'center' }}>
+        Выйти из аккаунта
+      </Button>
     </Stack>
   );
 }
@@ -219,7 +214,7 @@ function MainShell({ session, profile, onLogout, onProfileRefresh }) {
     if (participant?.user_id) {
       const { data: prof } = await supabase
         .from('profiles')
-        .select('id, username, first_name, last_name, avatar_url')
+        .select('id, username, first_name, last_name, avatar_url, restrict_voice, restrict_media')
         .eq('id', participant.user_id)
         .maybeSingle();
       otherProfile = prof;
@@ -349,7 +344,7 @@ function MainShell({ session, profile, onLogout, onProfileRefresh }) {
             )}
             {nav === 2 && (
               <Box sx={{ flex: 1, p: { xs: 2, md: 4 }, pb: isDesktop ? 4 : 10 }}>
-                <SettingsTab resolvedMode={resolvedMode} setMode={setMode} accent={accent} setAccent={setAccent} onLogout={onLogout} />
+                <SettingsTab resolvedMode={resolvedMode} setMode={setMode} accent={accent} setAccent={setAccent} onLogout={onLogout} myId={myId} profile={profile} email={session.user.email} onProfileRefresh={onProfileRefresh} />
               </Box>
             )}
             {nav === 3 && (

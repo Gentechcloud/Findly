@@ -1,11 +1,14 @@
 import { useEffect, useRef, useState } from 'react';
 import {
   Box, Stack, Typography, IconButton, TextField, CircularProgress, Tooltip, Snackbar, Alert,
+  Menu, MenuItem, ListItemIcon, ListItemText,
 } from '@mui/material';
 import ArrowBackRoundedIcon from '@mui/icons-material/ArrowBackRounded';
 import SendRoundedIcon from '@mui/icons-material/SendRounded';
 import AttachFileRoundedIcon from '@mui/icons-material/AttachFileRounded';
 import CloseRoundedIcon from '@mui/icons-material/CloseRounded';
+import MoreVertRoundedIcon from '@mui/icons-material/MoreVertRounded';
+import BlockRoundedIcon from '@mui/icons-material/BlockRounded';
 import { supabase } from '../../lib/supabaseClient';
 import FindlyAvatar from '../../components/common/FindlyAvatar';
 import MessageBubble from './MessageBubble';
@@ -17,7 +20,7 @@ function attachmentTypeFor(file) {
   return 'file';
 }
 
-export default function ChatWindow({ chatId, otherProfile, myId, onBack, isDesktop }) {
+export default function ChatWindow({ chatId, otherProfile, myId, onBack, isDesktop, onBlocked }) {
   const [messages, setMessages] = useState([]);
   const [hiddenIds, setHiddenIds] = useState(new Set());
   const [loading, setLoading] = useState(true);
@@ -25,8 +28,30 @@ export default function ChatWindow({ chatId, otherProfile, myId, onBack, isDeskt
   const [replyingTo, setReplyingTo] = useState(null);
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState('');
+  const [isBlocked, setIsBlocked] = useState(false);
+  const [menuAnchor, setMenuAnchor] = useState(null);
   const bottomRef = useRef(null);
   const fileInputRef = useRef(null);
+  const isGroup = otherProfile?.type === 'group';
+
+  useEffect(() => {
+    if (isGroup || !otherProfile?.id) { setIsBlocked(false); return; }
+    let cancelled = false;
+    supabase
+      .from('blocked_users')
+      .select('blocker_id')
+      .or(`and(blocker_id.eq.${myId},blocked_id.eq.${otherProfile.id}),and(blocker_id.eq.${otherProfile.id},blocked_id.eq.${myId})`)
+      .then(({ data }) => { if (!cancelled) setIsBlocked((data || []).length > 0); });
+    return () => { cancelled = true; };
+  }, [otherProfile?.id, myId, isGroup]);
+
+  async function handleBlock() {
+    if (!otherProfile?.id) return;
+    await supabase.from('blocked_users').insert({ blocker_id: myId, blocked_id: otherProfile.id });
+    setIsBlocked(true);
+    setMenuAnchor(null);
+    onBlocked?.();
+  }
 
   useEffect(() => {
     let cancelled = false;
@@ -158,6 +183,18 @@ export default function ChatWindow({ chatId, otherProfile, myId, onBack, isDeskt
             </Box>
           </>
         )}
+        {!isGroup && otherProfile?.id && (
+          <>
+            <Box sx={{ flex: 1 }} />
+            <IconButton onClick={(e) => setMenuAnchor(e.currentTarget)}><MoreVertRoundedIcon /></IconButton>
+            <Menu anchorEl={menuAnchor} open={!!menuAnchor} onClose={() => setMenuAnchor(null)}>
+              <MenuItem onClick={handleBlock} sx={{ color: 'error.main' }} disabled={isBlocked}>
+                <ListItemIcon><BlockRoundedIcon fontSize="small" color="error" /></ListItemIcon>
+                <ListItemText>{isBlocked ? 'Уже заблокирован' : 'Заблокировать'}</ListItemText>
+              </MenuItem>
+            </Menu>
+          </>
+        )}
       </Stack>
 
       <Box sx={{ flex: 1, overflowY: 'auto', p: 2, display: 'flex', flexDirection: 'column', gap: 1 }}>
@@ -191,31 +228,41 @@ export default function ChatWindow({ chatId, otherProfile, myId, onBack, isDeskt
         </Stack>
       )}
 
-      <Stack component="form" onSubmit={handleSendText} direction="row" alignItems="center" spacing={1} sx={{ p: 1.5, borderTop: replyingTo ? 'none' : '1px solid', borderColor: 'divider' }}>
-        <input ref={fileInputRef} type="file" hidden onChange={handleFilePicked} />
-        <Tooltip title="Прикрепить фото, видео или файл">
-          <IconButton onClick={() => fileInputRef.current?.click()} disabled={uploading}>
-            <AttachFileRoundedIcon />
-          </IconButton>
-        </Tooltip>
+      {isBlocked ? (
+        <Box sx={{ p: 2, textAlign: 'center', borderTop: '1px solid', borderColor: 'divider' }}>
+          <Typography variant="bodyMedium" color="text.secondary">
+            Переписка недоступна — пользователь заблокирован.
+          </Typography>
+        </Box>
+      ) : (
+        <Stack component="form" onSubmit={handleSendText} direction="row" alignItems="center" spacing={1} sx={{ p: 1.5, borderTop: replyingTo ? 'none' : '1px solid', borderColor: 'divider' }}>
+          <input ref={fileInputRef} type="file" hidden onChange={handleFilePicked} />
+          {!(otherProfile?.restrict_media) && (
+            <Tooltip title="Прикрепить фото, видео или файл">
+              <IconButton onClick={() => fileInputRef.current?.click()} disabled={uploading}>
+                <AttachFileRoundedIcon />
+              </IconButton>
+            </Tooltip>
+          )}
 
-        {draft.trim() === '' ? <VoiceRecorder onRecorded={handleVoiceRecorded} /> : null}
+          {draft.trim() === '' && !(otherProfile?.restrict_voice) ? <VoiceRecorder onRecorded={handleVoiceRecorded} /> : null}
 
-        <TextField
-          value={draft}
-          onChange={(e) => setDraft(e.target.value)}
-          placeholder={uploading ? 'Загрузка вложения...' : 'Написать сообщение...'}
-          fullWidth size="small" disabled={uploading}
-          onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) handleSendText(e); }}
-        />
-        <Tooltip title="Отправить">
-          <span>
-            <IconButton type="submit" disabled={!draft.trim()} sx={{ bgcolor: 'primary.main', color: 'primary.contrastText', '&:hover': { bgcolor: 'primary.main' }, '&.Mui-disabled': { bgcolor: 'action.disabledBackground' } }}>
-              <SendRoundedIcon />
-            </IconButton>
-          </span>
-        </Tooltip>
-      </Stack>
+          <TextField
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            placeholder={uploading ? 'Загрузка вложения...' : 'Написать сообщение...'}
+            fullWidth size="small" disabled={uploading}
+            onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) handleSendText(e); }}
+          />
+          <Tooltip title="Отправить">
+            <span>
+              <IconButton type="submit" disabled={!draft.trim()} sx={{ bgcolor: 'primary.main', color: 'primary.contrastText', '&:hover': { bgcolor: 'primary.main' }, '&.Mui-disabled': { bgcolor: 'action.disabledBackground' } }}>
+                <SendRoundedIcon />
+              </IconButton>
+            </span>
+          </Tooltip>
+        </Stack>
+      )}
       <Snackbar open={!!error} autoHideDuration={6000} onClose={() => setError('')} anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}>
         <Alert severity="error" onClose={() => setError('')} sx={{ borderRadius: 4 }}>{error}</Alert>
       </Snackbar>
