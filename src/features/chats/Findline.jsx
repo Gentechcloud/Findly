@@ -40,17 +40,46 @@ export default function Findline({ myId, onOpenChat, onFriendsChanged, onError, 
           setRelStatus(status);
         }
       } else {
-        const { data: myChats } = await supabase.from('chat_participants').select('chat_id').eq('user_id', myId);
+        const { data: myChats } = await supabase
+          .from('chat_participants')
+          .select('chat_id, chats:chat_id (id, type, title)')
+          .eq('user_id', myId);
         const chatIds = (myChats || []).map((c) => c.chat_id);
+        const chatMeta = Object.fromEntries((myChats || []).map((c) => [c.chat_id, c.chats]));
+
         if (chatIds.length) {
           const { data } = await supabase
             .from('messages')
-            .select('id, chat_id, content, created_at, sender_id')
+            .select('id, chat_id, content, created_at, sender_id, message_type')
             .in('chat_id', chatIds)
+            .eq('message_type', 'text')
             .ilike('content', `%${q}%`)
             .order('created_at', { ascending: false })
             .limit(15);
-          setMessageResults(data || []);
+
+          // Для личных чатов подтягиваем имя собеседника отдельным запросом (без embed).
+          const directChatIds = (data || [])
+            .map((m) => m.chat_id)
+            .filter((id) => chatMeta[id]?.type === 'direct');
+          let otherByChat = {};
+          if (directChatIds.length) {
+            const { data: parts } = await supabase
+              .from('chat_participants')
+              .select('chat_id, user_id')
+              .in('chat_id', directChatIds)
+              .neq('user_id', myId);
+            const otherIds = [...new Set((parts || []).map((p) => p.user_id))];
+            const { data: profs } = await supabase.from('profiles').select('id, first_name, last_name').in('id', otherIds);
+            const profById = Object.fromEntries((profs || []).map((p) => [p.id, p]));
+            (parts || []).forEach((p) => { otherByChat[p.chat_id] = profById[p.user_id]; });
+          }
+
+          setMessageResults((data || []).map((m) => ({
+            ...m,
+            chatName: chatMeta[m.chat_id]?.type === 'group'
+              ? chatMeta[m.chat_id]?.title
+              : otherByChat[m.chat_id] ? `${otherByChat[m.chat_id].first_name} ${otherByChat[m.chat_id].last_name}` : '...',
+          })));
         } else {
           setMessageResults([]);
         }
@@ -152,6 +181,7 @@ export default function Findline({ myId, onOpenChat, onFriendsChanged, onError, 
                 {messageResults.map((m) => (
                   <ListItemButton key={m.id} onClick={() => { onOpenChat(m.chat_id); close(); }} sx={{ py: 1.25, px: 2 }}>
                     <Stack sx={{ minWidth: 0 }}>
+                      <Typography variant="labelSmall" color="primary.main" noWrap>{m.chatName}</Typography>
                       <Typography variant="bodyMedium" noWrap>{m.content}</Typography>
                       <Typography variant="labelSmall" color="text.secondary">{new Date(m.created_at).toLocaleString()}</Typography>
                     </Stack>

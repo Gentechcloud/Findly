@@ -14,6 +14,7 @@ import InsertDriveFileRoundedIcon from '@mui/icons-material/InsertDriveFileRound
 import CheckRoundedIcon from '@mui/icons-material/CheckRounded';
 import CloseRoundedIcon from '@mui/icons-material/CloseRounded';
 import Waveform from '../../components/common/Waveform';
+import VideoMessagePlayer from './VideoMessagePlayer';
 
 function formatSize(bytes) {
   if (!bytes) return '';
@@ -143,7 +144,7 @@ export default function MessageBubble({
         ) : message.message_type === 'image' ? (
           <Box component="img" src={message.attachment_url} alt="" sx={{ maxWidth: 260, maxHeight: 320, borderRadius: 2, display: 'block' }} />
         ) : message.message_type === 'video' ? (
-          <Box component="video" src={message.attachment_url} controls sx={{ maxWidth: 260, maxHeight: 320, borderRadius: 2, display: 'block' }} />
+          <VideoMessagePlayer src={message.attachment_url} />
         ) : message.message_type === 'file' ? (
           <Stack direction="row" spacing={1} alignItems="center" component="a" href={message.attachment_url} download
             sx={{ textDecoration: 'none', color: 'inherit' }}>

@@ -1,6 +1,8 @@
 import { useRef, useState } from 'react';
 import { Box, IconButton, Typography, Stack, Tooltip } from '@mui/material';
 import MicRoundedIcon from '@mui/icons-material/MicRounded';
+import CheckRoundedIcon from '@mui/icons-material/CheckRounded';
+import CloseRoundedIcon from '@mui/icons-material/CloseRounded';
 import Waveform from '../../components/common/Waveform';
 
 const MAX_SECONDS = 300; // 5 минут
@@ -14,13 +16,15 @@ export default function VoiceRecorder({ onRecorded }) {
   const streamRef = useRef(null);
   const chunksRef = useRef([]);
   const audioCtxRef = useRef(null);
-  const analyserRef = useRef(null);
   const timerRef = useRef(null);
   const meterRef = useRef(null);
   const cancelledRef = useRef(false);
   const startTimeRef = useRef(0);
+  const startingRef = useRef(false); // защита от повторного запуска, пока getUserMedia ещё грузится
 
   async function startRecording() {
+    if (recording || startingRef.current) return;
+    startingRef.current = true;
     cancelledRef.current = false;
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -37,7 +41,6 @@ export default function VoiceRecorder({ onRecorded }) {
       setRecording(true);
       startTimeRef.current = Date.now();
 
-      // Визуализация уровня звука в реальном времени
       const AudioCtx = window.AudioContext || window.webkitAudioContext;
       const ctx = new AudioCtx();
       audioCtxRef.current = ctx;
@@ -45,7 +48,6 @@ export default function VoiceRecorder({ onRecorded }) {
       const analyser = ctx.createAnalyser();
       analyser.fftSize = 256;
       source.connect(analyser);
-      analyserRef.current = analyser;
       const data = new Uint8Array(analyser.frequencyBinCount);
 
       meterRef.current = setInterval(() => {
@@ -64,6 +66,8 @@ export default function VoiceRecorder({ onRecorded }) {
       }, 1000);
     } catch {
       alert('Не удалось получить доступ к микрофону. Разрешите доступ в настройках браузера.');
+    } finally {
+      startingRef.current = false;
     }
   }
 
@@ -104,34 +108,61 @@ export default function VoiceRecorder({ onRecorded }) {
     return out;
   }
 
-  if (recording) {
-    return (
-      <Stack direction="row" alignItems="center" spacing={1} sx={{ flex: 1, px: 1 }}>
-        <Box sx={{ width: 10, height: 10, borderRadius: '50%', bgcolor: 'error.main', animation: 'pulse 1s infinite' }} />
-        <Typography variant="labelMedium" sx={{ minWidth: 40 }}>
-          {String(Math.floor(seconds / 60)).padStart(1, '0')}:{String(seconds % 60).padStart(2, '0')}
-        </Typography>
-        <Box sx={{ flex: 1 }}>
-          <Waveform levels={liveLevels.slice(-32)} height={28} color="error.main" />
-        </Box>
-        <Tooltip title="Отменить">
-          <IconButton size="small" onClick={() => stopRecording(true)}>✕</IconButton>
-        </Tooltip>
-      </Stack>
-    );
+  // КЛЮЧЕВОЙ ФИКС: обработчики "нажали / отпустили" висят на одном и том же
+  // внешнем элементе, который НЕ исчезает и не заменяется, пока палец/мышь
+  // удерживается (setPointerCapture гарантирует, что pointerup долетит до
+  // этого же элемента, даже если его содержимое визуально поменялось —
+  // раньше кнопка во время записи подменялась другим блоком без обработчика
+  // отпускания, из-за чего отправить запись было нечем).
+  function handlePointerDown(e) {
+    e.currentTarget.setPointerCapture?.(e.pointerId);
+    startRecording();
+  }
+  function handlePointerUp() {
+    if (recording) stopRecording(false);
+  }
+  function handlePointerCancel() {
+    if (recording) stopRecording(true);
   }
 
   return (
-    <Tooltip title="Удерживайте, чтобы записать голосовое">
-      <IconButton
-        onMouseDown={startRecording}
-        onMouseUp={() => stopRecording(false)}
-        onMouseLeave={() => recording && stopRecording(false)}
-        onTouchStart={(e) => { e.preventDefault(); startRecording(); }}
-        onTouchEnd={(e) => { e.preventDefault(); stopRecording(false); }}
-      >
-        <MicRoundedIcon />
-      </IconButton>
-    </Tooltip>
+    <Box
+      onPointerDown={handlePointerDown}
+      onPointerUp={handlePointerUp}
+      onPointerCancel={handlePointerCancel}
+      sx={{ touchAction: 'none', display: 'flex', alignItems: 'center', flex: recording ? 1 : 'none' }}
+    >
+      {recording ? (
+        <Stack direction="row" alignItems="center" spacing={1} sx={{ flex: 1, px: 1 }}>
+          <Box sx={{ width: 10, height: 10, borderRadius: '50%', bgcolor: 'error.main', animation: 'pulse 1s infinite' }} />
+          <Typography variant="labelMedium" sx={{ minWidth: 40 }}>
+            {String(Math.floor(seconds / 60)).padStart(1, '0')}:{String(seconds % 60).padStart(2, '0')}
+          </Typography>
+          <Box sx={{ flex: 1 }}>
+            <Waveform levels={liveLevels.slice(-32)} height={28} color="error.main" />
+          </Box>
+          <Tooltip title="Отменить">
+            <IconButton size="small" onClick={(e) => { e.stopPropagation(); stopRecording(true); }}>
+              <CloseRoundedIcon fontSize="small" />
+            </IconButton>
+          </Tooltip>
+          <Tooltip title="Отправить голосовое">
+            <IconButton
+              size="small"
+              onClick={(e) => { e.stopPropagation(); stopRecording(false); }}
+              sx={{ bgcolor: 'primary.main', color: 'primary.contrastText', '&:hover': { bgcolor: 'primary.main' } }}
+            >
+              <CheckRoundedIcon fontSize="small" />
+            </IconButton>
+          </Tooltip>
+        </Stack>
+      ) : (
+        <Tooltip title="Удерживайте, чтобы записать голосовое">
+          <IconButton component="span">
+            <MicRoundedIcon />
+          </IconButton>
+        </Tooltip>
+      )}
+    </Box>
   );
 }

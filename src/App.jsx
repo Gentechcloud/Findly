@@ -32,6 +32,8 @@ import MailCenter from './features/friends/MailCenter';
 import CreateGroupDialog from './features/groups/CreateGroupDialog';
 import SecurityPrivacyAccount from './features/settings/SecurityPrivacyAccount';
 
+const BUILD_TAG = '2026-08-17-1'; // меняется при каждой новой версии — сверяйте в Настройках, что обновление дошло
+
 const NAV_ITEMS = [
   { label: 'Чаты', icon: <ChatBubbleRoundedIcon /> },
   { label: 'Друзья', icon: <GroupRoundedIcon /> },
@@ -70,10 +72,20 @@ function NavRail({ value, onChange }) {
   );
 }
 
-function SettingsTab({ resolvedMode, setMode, accent, setAccent, onLogout, myId, profile, email, onProfileRefresh }) {
+function SettingsTab({ resolvedMode, setMode, accent, setAccent, onLogout, myId, profile, email, onProfileRefresh, onOpenSearch }) {
   return (
     <Stack spacing={3} sx={{ maxWidth: 560, mx: 'auto' }}>
       <Typography variant="headlineSmall">Настройки</Typography>
+
+      <Card variant="outlined" sx={{ cursor: 'pointer' }} onClick={onOpenSearch}>
+        <CardContent sx={{ display: 'flex', alignItems: 'center', gap: 1.5, '&:last-child': { pb: 2 } }}>
+          <SearchRoundedIcon color="action" />
+          <Box>
+            <Typography variant="titleMedium">Поиск (Findline)</Typography>
+            <Typography variant="bodyMedium" color="text.secondary">Поиск по чатам, сообщениям и @никам</Typography>
+          </Box>
+        </CardContent>
+      </Card>
 
       <Card variant="outlined">
         <CardContent>
@@ -115,6 +127,10 @@ function SettingsTab({ resolvedMode, setMode, accent, setAccent, onLogout, myId,
       <Button variant="outlined" color="error" onClick={onLogout} sx={{ borderColor: 'error.main', color: 'error.main', alignSelf: 'center' }}>
         Выйти из аккаунта
       </Button>
+
+      <Typography variant="labelSmall" color="text.secondary" sx={{ textAlign: 'center', opacity: 0.6 }}>
+        Findly · сборка {BUILD_TAG}
+      </Typography>
     </Stack>
   );
 }
@@ -198,7 +214,9 @@ function MainShell({ session, profile, onLogout, onProfileRefresh }) {
       .eq('to_user', myId).eq('status', 'pending').eq('seen_by_recipient', false);
     const { count: c2 } = await supabase.from('friend_requests').select('id', { count: 'exact', head: true })
       .eq('from_user', myId).eq('seen_by_sender', false).neq('status', 'pending');
-    setHasUnread((c1 || 0) + (c2 || 0) > 0);
+    const { count: c3 } = await supabase.from('notifications').select('id', { count: 'exact', head: true })
+      .eq('user_id', myId).eq('seen', false);
+    setHasUnread((c1 || 0) + (c2 || 0) + (c3 || 0) > 0);
   }
   useEffect(() => { checkUnread(); }, [myId]);
 
@@ -237,6 +255,7 @@ function MainShell({ session, profile, onLogout, onProfileRefresh }) {
   function openChatWithProfile(chatId, otherProfile) {
     setActiveChatId(chatId);
     setActiveChatProfile(otherProfile);
+    setNav(0);
   }
 
   return (
@@ -344,7 +363,7 @@ function MainShell({ session, profile, onLogout, onProfileRefresh }) {
             )}
             {nav === 2 && (
               <Box sx={{ flex: 1, p: { xs: 2, md: 4 }, pb: isDesktop ? 4 : 10 }}>
-                <SettingsTab resolvedMode={resolvedMode} setMode={setMode} accent={accent} setAccent={setAccent} onLogout={onLogout} myId={myId} profile={profile} email={session.user.email} onProfileRefresh={onProfileRefresh} />
+                <SettingsTab resolvedMode={resolvedMode} setMode={setMode} accent={accent} setAccent={setAccent} onLogout={onLogout} myId={myId} profile={profile} email={session.user.email} onProfileRefresh={onProfileRefresh} onOpenSearch={() => setMobileSearchOpen(true)} />
               </Box>
             )}
             {nav === 3 && (

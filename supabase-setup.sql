@@ -592,3 +592,57 @@ exception when unique_violation then
 end;
 $$;
 grant execute on function public.change_username(text) to authenticated;
+
+-- ============================================================
+-- Этап 7б: общая таблица уведомлений + удаление из друзей
+-- ============================================================
+
+create table if not exists public.notifications (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid references public.profiles (id) on delete cascade,
+  kind text not null,
+  body text not null,
+  seen boolean not null default false,
+  created_at timestamptz not null default now()
+);
+alter table public.notifications enable row level security;
+
+drop policy if exists "Вижу только свои уведомления" on public.notifications;
+create policy "Вижу только свои уведомления" on public.notifications for select
+  using (auth.uid() = user_id);
+
+drop policy if exists "Отмечать своё прочитанным может только владелец" on public.notifications;
+create policy "Отмечать своё прочитанным может только владелец" on public.notifications for update
+  using (auth.uid() = user_id);
+
+-- Прямая вставка из клиента запрещена — уведомления создают только
+-- доверенные функции (security definer), например remove_friend ниже.
+drop policy if exists "Прямая вставка запрещена" on public.notifications;
+create policy "Прямая вставка запрещена" on public.notifications for insert
+  with check (false);
+
+create or replace function public.remove_friend(target_username text)
+returns void
+language plpgsql
+security definer set search_path = public
+as $$
+declare
+  me uuid := auth.uid();
+  target uuid;
+  my_name text;
+  target_name text;
+begin
+  select id, (first_name || ' ' || last_name) into target, target_name from public.profiles where username = target_username;
+  if target is null then raise exception 'Пользователь не найден'; end if;
+
+  select (first_name || ' ' || last_name) into my_name from public.profiles where id = me;
+
+  delete from public.friend_requests
+  where status = 'accepted' and ((from_user = me and to_user = target) or (from_user = target and to_user = me));
+
+  insert into public.notifications (user_id, kind, body) values
+    (me, 'friend_removed', my_name || ' и ' || target_name || ' больше не друзья.'),
+    (target, 'friend_removed', coalesce(my_name, 'Пользователь') || ' удалил(а) вас из друзей.');
+end;
+$$;
+grant execute on function public.remove_friend(text) to authenticated;

@@ -8,10 +8,23 @@ import FindlyAvatar from '../../components/common/FindlyAvatar';
 export default function MailCenter({ myId, anchorEl, onClose, onFriendsChanged }) {
   const [incoming, setIncoming] = useState([]);
   const [responses, setResponses] = useState([]);
+  const [notifications, setNotifications] = useState([]);
   const [loading, setLoading] = useState(true);
 
   async function load() {
     setLoading(true);
+
+    const { data: notifs } = await supabase
+      .from('notifications')
+      .select('id, kind, body, created_at, seen')
+      .eq('user_id', myId)
+      .order('created_at', { ascending: false })
+      .limit(20);
+    setNotifications(notifs || []);
+    const unseenNotifIds = (notifs || []).filter((n) => !n.seen).map((n) => n.id);
+    if (unseenNotifIds.length) {
+      await supabase.from('notifications').update({ seen: true }).in('id', unseenNotifIds);
+    }
 
     const { data: inc, error: incErr } = await supabase
       .from('friend_requests')
@@ -78,7 +91,7 @@ export default function MailCenter({ myId, anchorEl, onClose, onFriendsChanged }
           <Box sx={{ py: 3, display: 'flex', justifyContent: 'center' }}><CircularProgress size={22} /></Box>
         ) : (
           <Stack spacing={2}>
-            {incoming.length === 0 && responses.length === 0 && (
+            {incoming.length === 0 && responses.length === 0 && notifications.length === 0 && (
               <Typography variant="bodyMedium" color="text.secondary">Новых уведомлений нет.</Typography>
             )}
 
@@ -103,6 +116,12 @@ export default function MailCenter({ myId, anchorEl, onClose, onFriendsChanged }
               <Typography key={r.id} variant="bodyMedium" color="text.secondary">
                 {r.profile ? `${r.profile.first_name} ${r.profile.last_name}` : 'Пользователь'} {r.status === 'accepted' ? 'принял(а) вашу заявку в друзья' : 'отклонил(а) вашу заявку в друзья'}
               </Typography>
+            ))}
+
+            {(incoming.length > 0 || responses.length > 0) && notifications.length > 0 && <Divider />}
+
+            {notifications.map((n) => (
+              <Typography key={n.id} variant="bodyMedium" color="text.secondary">{n.body}</Typography>
             ))}
           </Stack>
         )}
