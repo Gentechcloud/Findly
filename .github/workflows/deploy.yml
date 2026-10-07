@@ -2,7 +2,7 @@ name: Deploy Findly to GitHub Pages
 
 on:
   push:
-    branches: [main]
+    branches: [index]
   workflow_dispatch:
 
 permissions:
