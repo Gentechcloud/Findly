@@ -22,20 +22,30 @@ jobs:
           distribution: 'temurin'
           java-version: '21'
 
+      # Устанавливаем все нужные пакеты принудительно, чтобы не падать из-за package.json
       - name: Install dependencies
-        run: npm install
+        run: |
+          npm install --legacy-peer-deps
+          npm install -D vite @capacitor/cli
+          npm install @capacitor/core @capacitor/android
 
-      - name: Build web assets (Vite)
-        run: npm run build
+      # Собираем веб-файлы через vite
+      - name: Build web assets
+        run: npx vite build
 
-      - name: Sync Capacitor Android
+      # Синхронизируем нативный Android
+      - name: Sync Capacitor
         run: npx cap sync android
 
+      # Даем права на выполнение градлу и собираем APK
       - name: Build Debug APK
         working-directory: ./android
-        run: ./gradlew assembleDebug
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleDebug --no-daemon
 
-      - name: Upload APK Artifact
+      # Загружаем готовый APK в артефакты
+      - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: findly-android-apk
