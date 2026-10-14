@@ -33,6 +33,10 @@
     "@capacitor/cli": "^8.5.3",
     "@types/react": "^19.2.17",
     "@types/react-dom": "^19.2.3",
+
+    "scripts": {
+  "build": "vite build"
+},
     "@vitejs/plugin-react": "^6.0.4",
     "oxlint": "^1.75.0",
     "vite": "^8.2.0"
