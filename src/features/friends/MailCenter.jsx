@@ -1,18 +1,30 @@
 import { useEffect, useState } from 'react';
 import {
-  Popover, Box, Stack, Typography, Button, CircularProgress, Divider,
+  Popover,
+  Box,
+  Typography,
+  Button,
+  CircularProgress,
+  Divider,
 } from '@mui/material';
 import { supabase } from '../../lib/supabaseClient';
 import FindlyAvatar from '../../components/common/FindlyAvatar';
+import { useBackHandler } from '../../native';
 
+import Stack from '../../components/common/Stack';
 export default function MailCenter({ myId, anchorEl, onClose, onFriendsChanged }) {
   const [incoming, setIncoming] = useState([]);
   const [responses, setResponses] = useState([]);
   const [notifications, setNotifications] = useState([]);
+  const [invites, setInvites] = useState([]);
   const [loading, setLoading] = useState(true);
+  useBackHandler(!!anchorEl, onClose);
 
   async function load() {
     setLoading(true);
+
+    const { data: inv } = await supabase.rpc('get_my_chat_invites');
+    setInvites(inv || []);
 
     const { data: notifs } = await supabase
       .from('notifications')
@@ -68,6 +80,13 @@ export default function MailCenter({ myId, anchorEl, onClose, onFriendsChanged }
 
   useEffect(() => { if (anchorEl) load(); }, [anchorEl, myId]);
 
+  async function respondInvite(id, accept) {
+    const { error } = await supabase.rpc('respond_chat_invite', { p_invite: id, p_accept: accept });
+    if (error) { console.error(error); return; }
+    setInvites((prev) => prev.filter((i) => i.invite_id !== id));
+    onFriendsChanged?.();
+  }
+
   async function respond(id, accept) {
     const { error } = await supabase.rpc('respond_friend_request', { request_id: id, accept });
     if (error) { console.error(error); return; }
@@ -82,7 +101,7 @@ export default function MailCenter({ myId, anchorEl, onClose, onFriendsChanged }
       onClose={onClose}
       anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
       transformOrigin={{ vertical: 'top', horizontal: 'right' }}
-      slotProps={{ paper: { sx: { borderRadius: 4, width: 360, maxHeight: 460, mt: 1 } } }}
+      slotProps={{ paper: { sx: { borderRadius: '16px', width: 360, maxWidth: 'calc(100vw - 24px)', maxHeight: 460, mt: 1 } } }}
     >
       <Box sx={{ p: 2 }}>
         <Typography variant="titleMedium" gutterBottom>Mail</Typography>
@@ -91,7 +110,7 @@ export default function MailCenter({ myId, anchorEl, onClose, onFriendsChanged }
           <Box sx={{ py: 3, display: 'flex', justifyContent: 'center' }}><CircularProgress size={22} /></Box>
         ) : (
           <Stack spacing={2}>
-            {incoming.length === 0 && responses.length === 0 && notifications.length === 0 && (
+            {incoming.length === 0 && responses.length === 0 && notifications.length === 0 && invites.length === 0 && (
               <Typography variant="bodyMedium" color="text.secondary">Новых уведомлений нет.</Typography>
             )}
 
@@ -110,7 +129,19 @@ export default function MailCenter({ myId, anchorEl, onClose, onFriendsChanged }
               </Stack>
             ))}
 
-            {incoming.length > 0 && responses.length > 0 && <Divider />}
+            {invites.map((inv) => (
+              <Stack key={inv.invite_id} spacing={0.5}>
+                <Typography variant="bodyMedium">
+                  <b>{inv.from_name || 'Пользователь'}</b> приглашает вас в {inv.chat_type === 'channel' ? 'канал' : 'группу'} «{inv.chat_title}»
+                </Typography>
+                <Stack direction="row" spacing={1}>
+                  <Button size="small" onClick={() => respondInvite(inv.invite_id, true)} sx={{ color: 'success.main', minWidth: 0 }}>Принять</Button>
+                  <Button size="small" onClick={() => respondInvite(inv.invite_id, false)} sx={{ color: 'error.main', minWidth: 0 }}>Отклонить</Button>
+                </Stack>
+              </Stack>
+            ))}
+
+            {(incoming.length > 0 || invites.length > 0) && responses.length > 0 && <Divider />}
 
             {responses.map((r) => (
               <Typography key={r.id} variant="bodyMedium" color="text.secondary">

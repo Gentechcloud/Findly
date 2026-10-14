@@ -8,6 +8,16 @@
     <meta name="theme-color" content="#4A46E0" />
     <meta name="description" content="Findly — кросс-платформенный мессенджер" />
     <title>Findly</title>
+    <script>
+      // Фон до загрузки приложения — чтобы не было белой вспышки в тёмной теме
+      (function () {
+        try {
+          var a = JSON.parse(localStorage.getItem('findly-appearance') || '{}');
+          var dark = a.mode === 'dark' || ((!a.mode || a.mode === 'system') && window.matchMedia('(prefers-color-scheme: dark)').matches);
+          document.documentElement.style.background = dark ? ((a.uiStyle === 'ios') ? '#000000' : '#131318') : '#FFFFFF';
+        } catch (e) {}
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

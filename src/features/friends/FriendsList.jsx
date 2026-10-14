@@ -1,7 +1,17 @@
 import { useEffect, useState } from 'react';
 import {
-  Box, Stack, Typography, List, ListItemButton, CircularProgress, IconButton,
-  Menu, MenuItem, ListItemIcon, ListItemText,
+  Box,
+  Typography,
+  List,
+  ListItemButton,
+  ButtonBase,
+  CircularProgress,
+  IconButton,
+  Divider,
+  Menu,
+  MenuItem,
+  ListItemIcon,
+  ListItemText,
 } from '@mui/material';
 import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
 import PersonRoundedIcon from '@mui/icons-material/PersonRounded';
@@ -11,7 +21,8 @@ import { supabase } from '../../lib/supabaseClient';
 import FindlyAvatar from '../../components/common/FindlyAvatar';
 import ProfileViewDialog from '../../components/common/ProfileViewDialog';
 
-export default function FriendsList({ myId, onOpenChat, refreshKey }) {
+import Stack from '../../components/common/Stack';
+export default function FriendsList({ myId, onOpenChat, refreshKey, ios, onError }) {
   const [friends, setFriends] = useState([]);
   const [loading, setLoading] = useState(true);
   const [menu, setMenu] = useState(null); // { anchorEl, friend }
@@ -20,53 +31,48 @@ export default function FriendsList({ myId, onOpenChat, refreshKey }) {
   async function load() {
     setLoading(true);
     const { data: rels, error } = await supabase
-      .from('friend_requests')
-      .select('from_user, to_user')
-      .eq('status', 'accepted')
-      .or(`from_user.eq.${myId},to_user.eq.${myId}`);
-
+      .from('friend_requests').select('from_user, to_user')
+      .eq('status', 'accepted').or(`from_user.eq.${myId},to_user.eq.${myId}`);
     if (error) console.error('FriendsList error:', error);
 
     const friendIds = (rels || []).map((r) => (r.from_user === myId ? r.to_user : r.from_user));
     if (friendIds.length === 0) { setFriends([]); setLoading(false); return; }
-
     const { data: profs } = await supabase
       .from('profiles')
       .select('id, username, first_name, last_name, avatar_url, bio, restrict_voice, restrict_media')
       .in('id', friendIds);
-
     setFriends(profs || []);
     setLoading(false);
   }
 
-  useEffect(() => { load(); }, [myId, refreshKey]);
+  useEffect(() => { load(); }, [myId, refreshKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
   async function openChat(friendProfile) {
     const { data, error } = await supabase.rpc('start_direct_chat', { other_username: friendProfile.username });
-    if (!error) onOpenChat(data, friendProfile);
+    if (error) { onError?.(error.message); return; }
+    onOpenChat({ id: data, type: 'direct', profile: friendProfile });
   }
 
   async function handleRemove() {
     const friend = menu.friend;
     setMenu(null);
     const { error } = await supabase.rpc('remove_friend', { target_username: friend.username });
-    if (!error) setFriends((prev) => prev.filter((f) => f.id !== friend.id));
+    if (error) { onError?.(error.message); return; }
+    setFriends((prev) => prev.filter((f) => f.id !== friend.id));
   }
 
   async function handleBlock() {
     const friend = menu.friend;
     setMenu(null);
     await supabase.from('blocked_users').insert({ blocker_id: myId, blocked_id: friend.id });
-    // Блокировка молча разрывает дружбу — собеседник не получает об этом уведомления.
+    // Блокировка молча разрывает дружбу — собеседник не получает уведомления.
     await supabase.from('friend_requests').delete()
       .eq('status', 'accepted')
       .or(`and(from_user.eq.${myId},to_user.eq.${friend.id}),and(from_user.eq.${friend.id},to_user.eq.${myId})`);
     setFriends((prev) => prev.filter((f) => f.id !== friend.id));
   }
 
-  if (loading) {
-    return <Box sx={{ p: 4, display: 'flex', justifyContent: 'center' }}><CircularProgress size={24} /></Box>;
-  }
+  if (loading) return <Box sx={{ p: 4, display: 'flex', justifyContent: 'center' }}><CircularProgress size={24} /></Box>;
 
   if (friends.length === 0) {
     return (
@@ -79,25 +85,44 @@ export default function FriendsList({ myId, onOpenChat, refreshKey }) {
     );
   }
 
+  const infoButton = (f) => (
+    <IconButton size="small" onClick={(e) => { e.stopPropagation(); setMenu({ anchorEl: e.currentTarget, friend: f }); }}>
+      <InfoOutlinedIcon fontSize="small" sx={{ color: ios ? 'primary.main' : undefined }} />
+    </IconButton>
+  );
+
   return (
     <>
-      <List disablePadding sx={{ p: 1, display: 'flex', flexDirection: 'column', gap: 0.5, maxWidth: 560, mx: 'auto' }}>
-        {friends.map((f) => (
-          <ListItemButton key={f.id} onClick={() => openChat(f)} sx={{ py: 1.25, px: 1.5, gap: 1.5, borderRadius: 4 }}>
-            <FindlyAvatar src={f.avatar_url} name={`${f.first_name || ''} ${f.last_name || ''}`} seed={f.username} size={48} />
-            <Stack sx={{ minWidth: 0, flex: 1 }}>
-              <Typography variant="titleSmall" noWrap>{f.first_name} {f.last_name}</Typography>
-              <Typography variant="bodyMedium" color="text.secondary" noWrap>@{f.username}</Typography>
-            </Stack>
-            <IconButton
-              size="small"
-              onClick={(e) => { e.stopPropagation(); setMenu({ anchorEl: e.currentTarget, friend: f }); }}
-            >
-              <InfoOutlinedIcon fontSize="small" />
-            </IconButton>
-          </ListItemButton>
-        ))}
-      </List>
+      {ios ? (
+        <Box>
+          {friends.map((f, i) => (
+            <Box key={f.id}>
+              <ButtonBase onClick={() => openChat(f)} component="div" sx={{ width: '100%', display: 'flex', alignItems: 'center', gap: 1.5, px: 1.75, py: 1, textAlign: 'left', borderRadius: 0 }}>
+                <FindlyAvatar src={f.avatar_url} name={`${f.first_name || ''} ${f.last_name || ''}`} seed={f.username} size={46} />
+                <Box sx={{ flex: 1, minWidth: 0 }}>
+                  <Typography noWrap sx={{ fontSize: 17, fontWeight: 500 }}>{f.first_name} {f.last_name}</Typography>
+                  <Typography noWrap sx={{ fontSize: 14, color: 'text.secondary' }}>@{f.username}</Typography>
+                </Box>
+                {infoButton(f)}
+              </ButtonBase>
+              {i < friends.length - 1 && <Divider sx={{ ml: '76px', borderBottomWidth: '0.5px' }} />}
+            </Box>
+          ))}
+        </Box>
+      ) : (
+        <List disablePadding sx={{ p: 1, display: 'flex', flexDirection: 'column', gap: 0.5, maxWidth: 560, mx: 'auto' }}>
+          {friends.map((f) => (
+            <ListItemButton key={f.id} onClick={() => openChat(f)} sx={{ py: 1.25, px: 1.5, gap: 1.5, borderRadius: '16px' }}>
+              <FindlyAvatar src={f.avatar_url} name={`${f.first_name || ''} ${f.last_name || ''}`} seed={f.username} size={48} />
+              <Stack sx={{ minWidth: 0, flex: 1 }}>
+                <Typography variant="titleSmall" noWrap>{f.first_name} {f.last_name}</Typography>
+                <Typography variant="bodyMedium" color="text.secondary" noWrap>@{f.username}</Typography>
+              </Stack>
+              {infoButton(f)}
+            </ListItemButton>
+          ))}
+        </List>
+      )}
 
       <Menu anchorEl={menu?.anchorEl} open={!!menu} onClose={() => setMenu(null)}>
         <MenuItem onClick={() => { setViewingProfile(menu.friend); setMenu(null); }}>

@@ -1,13 +1,29 @@
 import { useEffect, useState } from 'react';
 import {
-  Stack, Typography, Card, CardContent, FormControlLabel, Checkbox,
-  Select, MenuItem, Box, List, ListItemButton, Button, TextField, Alert,
-  CircularProgress, Snackbar, Divider,
+  Typography,
+  Card,
+  CardContent,
+  FormControlLabel,
+  Checkbox,
+  Select,
+  MenuItem,
+  Box,
+  List,
+  ListItemButton,
+  Button,
+  TextField,
+  Alert,
+  CircularProgress,
+  Snackbar,
+  Divider,
 } from '@mui/material';
 import { supabase } from '../../lib/supabaseClient';
 import FindlyAvatar from '../../components/common/FindlyAvatar';
 
-export default function SecurityPrivacyAccount({ myId, profile, email, onProfileRefresh }) {
+import Stack from '../../components/common/Stack';
+// section: 'all' — всё сразу (ПК/Material), 'privacy' — безопасность+приватность+чёрный список, 'account' — пароль/ник/почта
+export default function SecurityPrivacyAccount({ myId, profile, email, onProfileRefresh, section = 'all' }) {
+  const show = (name) => section === 'all' || section === name;
   const [restrictVoice, setRestrictVoice] = useState(profile?.restrict_voice || false);
   const [restrictMedia, setRestrictMedia] = useState(profile?.restrict_media || false);
   const [avatarVis, setAvatarVis] = useState(profile?.avatar_visibility || 'all');
@@ -90,6 +106,7 @@ export default function SecurityPrivacyAccount({ myId, profile, email, onProfile
 
   return (
     <Stack spacing={3} sx={{ maxWidth: 560, mx: 'auto' }}>
+      {show('privacy') && (<>
       <Card variant="outlined">
         <CardContent>
           <Typography variant="titleMedium" gutterBottom>Безопасность — что мне могут присылать</Typography>
@@ -152,6 +169,9 @@ export default function SecurityPrivacyAccount({ myId, profile, email, onProfile
         </CardContent>
       </Card>
 
+      </>)}
+
+      {show('account') && (
       <Card variant="outlined">
         <CardContent>
           <Typography variant="titleMedium" gutterBottom>Смена пароля</Typography>
@@ -185,6 +205,7 @@ export default function SecurityPrivacyAccount({ myId, profile, email, onProfile
           </Stack>
         </CardContent>
       </Card>
+      )}
 
       <Snackbar open={avatarHint} anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}>
         <Alert severity="info" sx={{ borderRadius: 4 }}>

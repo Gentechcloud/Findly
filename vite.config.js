@@ -5,10 +5,14 @@ import { VitePWA } from 'vite-plugin-pwa'
 // base берётся из переменной окружения VITE_BASE_PATH, которую
 // подставляет GitHub Actions (см. .github/workflows/deploy.yml) —
 // значение равно "/<имя-репозитория>/". Локально (npm run dev) base = "/".
+// Для Android-приложения (VITE_TARGET=android) сервис-воркер/PWA не нужен:
+// файлы лежат внутри приложения, а кеш мешал бы обновлениям.
+const isAndroidBuild = process.env.VITE_TARGET === 'android';
+
 export default defineConfig({
   plugins: [
     react(),
-    VitePWA({
+    !isAndroidBuild && VitePWA({
       registerType: 'autoUpdate',
       includeAssets: ['apple-touch-icon.png'],
       manifest: {
@@ -33,6 +37,6 @@ export default defineConfig({
         globPatterns: ['**/*.{js,css,html,woff,woff2,png,svg}'],
       },
     }),
-  ],
+  ].filter(Boolean),
   base: process.env.VITE_BASE_PATH || '/',
 })

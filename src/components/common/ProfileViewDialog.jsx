@@ -1,10 +1,21 @@
-import { Dialog, DialogContent, Stack, Typography, IconButton, Box } from '@mui/material';
+import {
+  Dialog,
+  DialogContent,
+  Typography,
+  IconButton,
+  Box,
+  Button,
+} from '@mui/material';
 import CloseRoundedIcon from '@mui/icons-material/CloseRounded';
+import BlockRoundedIcon from '@mui/icons-material/BlockRounded';
 import FindlyAvatar from './FindlyAvatar';
+import { useBackHandler } from '../../native';
 
-export default function ProfileViewDialog({ open, onClose, profile }) {
+import Stack from './Stack';
+export default function ProfileViewDialog({ open, onClose, profile, onBlock, blocked }) {
+  useBackHandler(open, onClose);
   return (
-    <Dialog open={open} onClose={onClose} fullWidth maxWidth="xs" PaperProps={{ sx: { borderRadius: 5 } }}>
+    <Dialog open={open} onClose={onClose} fullWidth maxWidth="xs">
       <IconButton onClick={onClose} sx={{ position: 'absolute', top: 8, right: 8 }}>
         <CloseRoundedIcon />
       </IconButton>
@@ -19,6 +30,11 @@ export default function ProfileViewDialog({ open, onClose, profile }) {
           <Typography variant="labelSmall" color="text.secondary">
             Публикации, лайки и рейтинг появятся здесь на Этапе 9
           </Typography>
+          {onBlock && (
+            <Button color="error" startIcon={<BlockRoundedIcon />} onClick={onBlock} disabled={blocked}>
+              {blocked ? 'Пользователь заблокирован' : 'Заблокировать'}
+            </Button>
+          )}
         </Stack>
       </DialogContent>
     </Dialog>

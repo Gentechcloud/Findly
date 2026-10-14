@@ -1,13 +1,22 @@
 import { useEffect, useState } from 'react';
 import {
-  Paper, InputBase, IconButton, Box, List, ListItemButton, Typography,
-  ClickAwayListener, CircularProgress, Stack, Button,
+  Paper,
+  InputBase,
+  IconButton,
+  Box,
+  List,
+  ListItemButton,
+  Typography,
+  ClickAwayListener,
+  CircularProgress,
+  Button,
 } from '@mui/material';
 import SearchRoundedIcon from '@mui/icons-material/SearchRounded';
 import CloseRoundedIcon from '@mui/icons-material/CloseRounded';
 import { supabase } from '../../lib/supabaseClient';
 import FindlyAvatar from '../../components/common/FindlyAvatar';
 
+import Stack from '../../components/common/Stack';
 export default function Findline({ myId, onOpenChat, onFriendsChanged, onError, autoFocus }) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
@@ -76,7 +85,7 @@ export default function Findline({ myId, onOpenChat, onFriendsChanged, onError, 
 
           setMessageResults((data || []).map((m) => ({
             ...m,
-            chatName: chatMeta[m.chat_id]?.type === 'group'
+            chatName: chatMeta[m.chat_id]?.type !== 'direct'
               ? chatMeta[m.chat_id]?.title
               : otherByChat[m.chat_id] ? `${otherByChat[m.chat_id].first_name} ${otherByChat[m.chat_id].last_name}` : '...',
           })));

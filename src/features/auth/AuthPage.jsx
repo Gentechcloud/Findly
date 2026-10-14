@@ -1,13 +1,24 @@
 import { useState } from 'react';
 import {
-  Box, Paper, Stack, Typography, TextField, Button, Fade, Grow,
-  Alert, IconButton, InputAdornment, useMediaQuery, CircularProgress,
+  Box,
+  Paper,
+  Typography,
+  TextField,
+  Button,
+  Fade,
+  Grow,
+  Alert,
+  IconButton,
+  InputAdornment,
+  useMediaQuery,
+  CircularProgress,
 } from '@mui/material';
 import VisibilityRoundedIcon from '@mui/icons-material/VisibilityRounded';
 import VisibilityOffRoundedIcon from '@mui/icons-material/VisibilityOffRounded';
 import { supabase } from '../../lib/supabaseClient';
 import Waveform from '../../components/common/Waveform';
 
+import Stack from '../../components/common/Stack';
 const USERNAME_RE = /^[a-zA-Z0-9_]{3,20}$/;
 
 export default function AuthPage({ onAuthed }) {

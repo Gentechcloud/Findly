@@ -1,15 +1,20 @@
 import { useRef, useState } from 'react';
 import {
-  Box, Paper, Stack, Typography, TextField, Button, Alert,
-  IconButton, CircularProgress, useMediaQuery,
+  Box,
+  Paper,
+  Typography,
+  TextField,
+  Button,
+  Alert,
+  CircularProgress,
 } from '@mui/material';
 import PhotoCameraRoundedIcon from '@mui/icons-material/PhotoCameraRounded';
 import ImageRoundedIcon from '@mui/icons-material/ImageRounded';
 import { supabase } from '../../lib/supabaseClient';
 import FindlyAvatar from '../../components/common/FindlyAvatar';
 
+import Stack from '../../components/common/Stack';
 export default function OnboardingPage({ session, onDone }) {
-  const isDesktop = useMediaQuery('(min-width:900px)');
   const galleryInput = useRef(null);
   const cameraInput = useRef(null);
 

@@ -1,13 +1,19 @@
-import { useRef, useState } from 'react';
-import { Box, IconButton, Typography, Stack, Tooltip } from '@mui/material';
+import { useEffect, useRef, useState } from 'react';
+import {
+  Box,
+  IconButton,
+  Typography,
+  Tooltip,
+} from '@mui/material';
 import MicRoundedIcon from '@mui/icons-material/MicRounded';
 import CheckRoundedIcon from '@mui/icons-material/CheckRounded';
 import CloseRoundedIcon from '@mui/icons-material/CloseRounded';
 import Waveform from '../../components/common/Waveform';
 
+import Stack from '../../components/common/Stack';
 const MAX_SECONDS = 300; // 5 минут
 
-export default function VoiceRecorder({ onRecorded }) {
+export default function VoiceRecorder({ onRecorded, onRecordingChange }) {
   const [recording, setRecording] = useState(false);
   const [seconds, setSeconds] = useState(0);
   const [liveLevels, setLiveLevels] = useState([]);
@@ -21,6 +27,8 @@ export default function VoiceRecorder({ onRecorded }) {
   const cancelledRef = useRef(false);
   const startTimeRef = useRef(0);
   const startingRef = useRef(false); // защита от повторного запуска, пока getUserMedia ещё грузится
+
+  useEffect(() => { onRecordingChange?.(recording); }, [recording]); // eslint-disable-line react-hooks/exhaustive-deps
 
   async function startRecording() {
     if (recording || startingRef.current) return;

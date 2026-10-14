@@ -7,7 +7,7 @@ import { Box, useTheme } from '@mui/material';
  * - `variant="active"`  → fast animation, used while actually recording/playing a voice message.
  * - `levels`            → pass real amplitude data (0..1 per bar) to render a static/live waveform.
  */
-export default function Waveform({ bars = 28, variant = 'ambient', levels, color, height = 32 }) {
+export default function Waveform({ bars = 28, variant = 'ambient', levels, color, height = 32, progress }) {
   const theme = useTheme();
   const barColor = color || theme.m3?.tertiary || theme.palette.primary.main;
 
@@ -36,7 +36,7 @@ export default function Waveform({ bars = 28, variant = 'ambient', levels, color
             borderRadius: 999,
             backgroundColor: barColor,
             height: `${Math.max(12, h * 100)}%`,
-            opacity: 0.85,
+            opacity: progress != null ? (i < Math.round(heights.length * progress) ? 1 : 0.4) : 0.85,
             transformOrigin: 'center',
             ...(animated && {
               animation: `findly-wave ${variant === 'active' ? 0.7 : 1.8}s ease-in-out ${i * 0.045}s infinite alternate`,
