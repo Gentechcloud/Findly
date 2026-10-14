@@ -31,7 +31,7 @@ npm run dev              # http://localhost:5173
 3. Любой push в `main` запускает сборку (вкладка Actions).
 
 ## Приложение для Android
-Подробная инструкция — [ANDROID.md](./ANDROID.md). Кратко: `npm run android:sync` → `npm run android:open` → Build APK в Android Studio.
+Подробная инструкция — [ANDROID.md](./ANDROID.md). Самый простой путь: GitHub → Actions → **Build Android APK** → Run workflow → скачать APK из Artifacts (ничего не нужно настраивать на своём компьютере). Альтернатива — локальная сборка в Android Studio (`npm run android:sync` → `npm run android:open`).
 
 ## Структура
 ```
