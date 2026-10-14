@@ -1,0 +1,15 @@
+{
+	"appId": "com.findly.app",
+	"appName": "Findly",
+	"webDir": "dist",
+	"backgroundColor": "#FFFFFF",
+	"android": {
+		"allowMixedContent": false
+	},
+	"plugins": {
+		"SystemBars": {
+			"insetsHandling": "native",
+			"initialViewportFitValueHint": "cover"
+		}
+	}
+}
